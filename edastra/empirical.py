@@ -39,6 +39,24 @@ def teff_Noyes1984(bv, bv_err=None):
     return teff
 
 
+def bv_Noyes1984(teff, teff_err=None):
+    """Noyes et al. 1984, ApJ, 279, 763"""
+    # 0.4 < bv < 1.4
+    teff = np.atleast_1d(teff)
+    logteff = np.log10(teff)
+    f = np.poly1d([-1 / 0.234, 3.908 / 0.234])
+    fdot = np.polyder(f)
+    bv = f(logteff)
+    if teff_err is not None:
+        teff_err = np.atleast_1d(teff_err)
+        teff_var = teff_err ** 2
+        logteff_var = teff_var / (np.log(10) * teff) ** 2
+        bv_var = logteff_var * fdot(logteff) ** 2
+        bv_err = np.sqrt(bv_var)
+        return bv, bv_err
+    return bv
+
+
 def tau_Noyes1984(bv, bv_err=None):
     """Noyes et al. 1984, ApJ, 279, 763"""
     bv = np.atleast_1d(bv)
