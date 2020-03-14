@@ -1,6 +1,23 @@
+import subprocess
+import os
+
 import numpy as np
+from astropy.io import fits
 from astropy.convolution import Gaussian1DKernel
 from scipy import interpolate, signal
+
+
+def prot_acf(t, y, max_per=None, s=0, fill=True, criterium='height', **kwargs):
+    if max_per is not None:
+        max_per = float(max_per)
+    lags, ryy = acf(y, t, s=s, fill=fill, maxlag=max_per)
+    peaks, properties = signal.find_peaks(ryy, **kwargs)
+    if criterium == 'height':
+        metric = ryy[peaks]
+    elif criterium == 'prominence':
+        metric = properties['prominences']
+    bp = lags[peaks][metric.argmax()]
+    return bp
 
 
 def acf(y, t=None, maxlag=None, s=0, fill=False):
@@ -30,28 +47,138 @@ def acf(y, t=None, maxlag=None, s=0, fill=False):
     """
     if t is None:
         t = np.arange(len(y))
-
     if fill:
         t, y = fill_gaps(t, y)
-
     n = len(y)
-
     if maxlag is None:
         maxlag = n
-
     if type(maxlag) is float:
         maxlag = np.where(t - np.min(t) <= maxlag)[0][-1] + 1
-
     f = np.fft.fft(y - y.mean(), n=2 * n)
     ryy = np.fft.ifft(f * np.conjugate(f))[:maxlag].real
-
     if s > 0:
         ryy = smooth(ryy, Gaussian1DKernel(stddev=s))
-
     ryy /= ryy[0]
     lags = t[:maxlag] - np.min(t[:maxlag])
-
     return lags, ryy
+
+
+def inpaint_kepler(t, flux, imax=100, verbose=False):
+    """Gaps filled with inpainting
+    
+    Parameters
+    ----------
+    t, y: irregularly sampled time series
+    
+    Returns
+    -------
+    inp_reg: inpainted regular sampled data
+    """
+    bad, = np.where(flux == 0.0)
+    iflux = run_mca1d(flux, imax=imax, verbose=verbose)
+    n = iflux.size
+    inp_reg = np.empty((2, n))
+    inp_reg[0, :] = t
+    inp_reg[1, :] = flux
+    inp_reg[1, bad] = iflux[bad]
+    return inp_reg
+
+
+def size_gap(in_data):
+    """Search the size of the larger gap in a 1d signal
+    
+    Parameters
+    ----------
+    in_data: incomplete 1D data
+    
+    Returns
+    -------
+    max size of the gaps
+    """
+    index, = np.where(in_data != 0.0)
+    gap_size = np.diff(index)
+    return np.max(gap_size)
+
+
+def run_mca1d(in_data, imax=100, verbose=False):
+    """Process the inpainting of an incomplete 1d signal using Multiscale Discrete Cosine Transform
+    
+    Parameters
+    ----------
+    in_data: incomplete 1d signal
+    
+    Returns
+    -------
+    out_data: inpainted data
+    """
+    ind, = np.where(in_data != 0.0)
+    nind, = np.where(in_data == 0.0)
+    m = np.mean(in_data[ind])
+    if verbose:
+        print('mean = ', m)
+        print('noise = ', np.std(np.fft.fft(in_data[ind]).real))
+    in_data2 = in_data - m
+    in_data2[nind] = 0.0
+    mgap = size_gap(in_data2)
+    nscale = int(np.log(mgap) / np.log(2)) + 1.
+    y = int(np.log(mgap * 8.) / np.log(2)) + 1.
+    DCTBlockSize = int(2 ** y)
+    if verbose:
+        print('**** DCTBlockSize = ', DCTBlockSize)
+        print('**** ITER = ', imax)
+        out_data2 = cb_mca1d(in_data2, opt=f'-H -s0 -t3 -O -B {DCTBlockSize} '
+                                           f'-L -v -i {imax} -D2')
+    else:
+        out_data2 = cb_mca1d(in_data2, opt=f'-H -s0 -t3 -O -B {DCTBlockSize} '
+                                           f'-L -i {imax} -D2')
+    out_data = out_data2 + m
+    return out_data
+
+
+def cb_mca1d(imag, opt):
+    """Inpainting by decomposition of an image on multible bases
+    
+    Parameters
+    ----------
+    imag: 2D array
+        image we want to decompose
+        
+    Returns
+    -------
+    result: image inpainted
+    """
+    EXECDIR = '~/Documents/Code/K-Inpainting/K-inpainting/Exec_C++/Linux_64'
+    noise = get_noise(imag)
+    filename = 'result'
+    nameimag = f'tmp{np.random.randint(1e6)}.fits'
+    fits.writeto(nameimag, imag)
+    cmd = f'{EXECDIR}/cb_mca1d {opt} -g {noise} {nameimag} {filename}'
+    subprocess.call(cmd.split())
+    result = fits.open(f'{filename}.fits')[0].data
+    os.remove(nameimag)
+    os.remove(f'{filename}.fits')
+    os.remove(f'{filename}_cos.fits')
+    os.remove(f'{filename}_resi.fits')
+    return result
+
+
+def zero_gaps(t, y, ts=None):
+    if ts is None:
+        ts = float(np.median(np.diff(t)))
+    gaps, = np.where(np.diff(t) > 1.5 * ts)
+    t_gaps = []
+    y_gaps = []
+    tnew = np.copy(t)
+    ynew = np.copy(y)
+    for g in gaps:
+        t0, t1 = tnew[g:g+2]
+        tfill = np.arange(t0+ts, t1, ts)
+        tnew = np.append(tnew, tfill)
+        ynew = np.append(ynew, np.zeros_like(tfill))
+    sorted_args = tnew.argsort()
+    tnew = tnew[sorted_args]
+    ynew = ynew[sorted_args]
+    return tnew, ynew
 
 
 def fill_gaps(t, y, ts=None):
