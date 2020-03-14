@@ -131,34 +131,71 @@ def Rossby_Saar1999(prot, bv, prot_err=None, bv_err=None):
     return ro
 
 
-def Gyro_Barneslike(n, a, b, c, bv, age=None, prot=None):
+def Gyro_Barneslike(n, a, b, c, bv,
+                    n_err=0, a_err=0, b_err=0, c_err=0,
+                    bv_err=None, age=None, prot=None,
+                    age_err=None, prot_err=None, diff_rot=False):
     bv = np.atleast_1d(bv).reshape(-1, 1)
     if age is not None:
         logprot = n * np.log(age) + b * np.log(bv - c) + np.log(a)
         prot = np.exp(logprot)
+        if bv_err is not None and age_err is not None:
+            bv_err = np.atleast_1d(bv_err)
+            age_err = np.atleast_1d(age_err)
+            logage_var = (age_err / age) ** 2
+            bvc_err = np.hypot(bv_err, c_err)
+            logbvc_var = (bvc_err / (bv - c)) ** 2
+            n_var = n_err ** 2
+            b_var = b_err ** 2
+            loga_var = (a_err / a) ** 2
+            logprot_var = n_var * np.log(age) ** 2 + logage_var * n ** 2 + \
+                          b_var * np.log(bv - c) ** 2 + logbvc_var * b ** 2 + \
+                          loga_var
+            prot_var = logprot_var * prot ** 2
+            prot_err = np.sqrt(prot_var)
+            return prot, prot_err
         return prot
     elif prot is not None:
         logage = (np.log(prot) - b * np.log(bv - c) - np.log(a)) / n
         age = np.exp(logage)
+        if bv_err is not None and prot_err is not None:
+            bv_err = np.atleast_1d(bv_err)
+            prot_err = np.atleast_1d(prot_err)
+            logprot_var = (prot_err / prot) ** 2
+            if diff_rot == True:
+                logprot_var += (10 ** -1.85 * prot ** 0.3) ** 2
+            bvc_err = np.hypot(bv_err, c_err)
+            logbvc_var = (bvc_err / (bv - c)) ** 2
+            n_var = n_err ** 2
+            b_var = b_err ** 2
+            loga_var = (a_err / a) ** 2
+            nlogage_var = logprot_var + loga_var + \
+                          b_var * np.log(bv - c) ** 2 + logbvc_var * b ** 2
+            nlogage_err = np.sqrt(nlogage_var)
+            logage_err = np.hypot(nlogage_err / n, logage * n_err / n)
+            age_var = (logage_err * age) ** 2
+            age_err = np.sqrt(age_var)
+            return age, age_err
         return age
     else:
         raise ValueError("One of (age, prot) must be given")
 
 
-def Gyro_Barnes2007(bv, age=None, prot=None):
+def Gyro_Barnes2007(bv, **kwargs):
     """Barnes 2007, ApJ, 669, 1167"""
-    return Gyro_Barneslike(n=.5189, a=.7725, b=.601, c=.40, 
-                           bv=bv, age=age, prot=prot)
+    return Gyro_Barneslike(n=.5189, a=.7725, b=.601, c=.40,
+                           n_err=.007, a_err=.011, b_err=.024, c_err=0., 
+                           bv=bv, **kwargs)
 
     
-def Gyro_Mamajek2008(bv, age=None, prot=None):
+def Gyro_Mamajek2008(bv, **kwargs):
     """Mamajek & Hillenbrand 2008, ApJ, 687, 1264"""
     return Gyro_Barneslike(n=.566, a=.407, b=.325, c=.495,
-                           bv=bv, age=age, prot=prot)
+                           n_err=.008, a_err=.021, b_err=.024, c_err=.010,
+                           bv=bv, **kwargs)
 
 
-def Gyro_Angus2015(bv, age=None, prot=None):
+def Gyro_Angus2015(bv, **kwargs):
     """Angus et al. 2015, MNRAS, 450, 1787"""
     return Gyro_Barneslike(n=.55, a=.4, b=.31, c=.45,
-                           bv=bv, age=age, prot=prot)
-
+                           bv=bv, **kwargs)
