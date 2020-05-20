@@ -147,7 +147,7 @@ def cb_mca1d(imag, opt):
     -------
     result: image inpainted
     """
-    EXECDIR = '~/Documents/Code/K-Inpainting/K-inpainting/Exec_C++/Linux_64'
+    PACKAGEDIR = os.path.abspath(os.path.dirname(__file__))
     noise = get_noise(imag)
     filename = 'result'
     nameimag = f'tmp{np.random.randint(1e6)}.fits'
