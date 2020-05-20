@@ -15,7 +15,7 @@ setup(
       name="Ed Astra",
       version=version,
       author="Eduardo Nunes",
-      author_email="diofanto.nunes@gmail.com",
+      author_email="dioph@pm.me",
       license="MIT",
       description="Random astro utilities",
       long_description=long_description,
