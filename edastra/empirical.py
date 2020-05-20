@@ -1,5 +1,7 @@
 import numpy as np
-
+from scipy import interpolate
+from astropy import table
+import os
 
 def mass_Noyes1984(bv, bv_err=None):
     """Noyes et al. 1984, ApJ, 279, 763"""
@@ -135,7 +137,7 @@ def Gyro_Barneslike(n, a, b, c, bv,
                     n_err=0, a_err=0, b_err=0, c_err=0,
                     bv_err=None, age=None, prot=None,
                     age_err=None, prot_err=None, diff_rot=False):
-    bv = np.atleast_1d(bv).reshape(-1, 1)
+    bv = np.atleast_1d(bv)
     if age is not None:
         logprot = n * np.log(age) + b * np.log(bv - c) + np.log(a)
         prot = np.exp(logprot)
@@ -199,3 +201,44 @@ def Gyro_Angus2015(bv, **kwargs):
     """Angus et al. 2015, MNRAS, 450, 1787"""
     return Gyro_Barneslike(n=.55, a=.4, b=.31, c=.45,
                            bv=bv, **kwargs)
+
+
+def tau_BarnesKim2010(mass=None, teff=None, mass_err=None):
+    fname = os.path.join(os.path.dirname(__file__), "data/barnes_kim_2010.csv")
+    tbl = table.Table.read(fname)
+    if mass is not None:
+        f = interpolate.interp1d(tbl['M'], tbl['globalToT'], fill_value='extrapolate')
+        tau = f(mass)
+        if mass_err is not None:
+            mass_err = np.atleast_1d(mass_err)
+            dxs = (f.x[1:] + f.x[:-1]) / 2
+            dys = np.diff(f.y) / np.diff(f.x)
+            df = interpolate.interp1d(dxs, dys, 'nearest')
+            tau_err = np.abs(df(mass) * mass_err)
+            return tau, tau_err
+        return tau
+    elif teff is not None:
+        f = interpolate.interp1d(tbl['logT'], tbl['globalToT'], fill_value='extrapolate')
+        logteff = np.log10(teff)
+        tau = f(logteff)
+        return tau
+    else:
+        raise ValueError("One of (mass, teff) must be given")
+
+
+def Gyro_Barnes2010(tau, prot, P0=1.1, prot_err=None, tau_err=None, initial_err=False):
+    k_c = 0.646
+    k_i = 452
+    age = (tau / k_c) * np.log(prot / P0) + (k_i / (2 * tau)) * (prot**2 - P0**2)
+    if tau_err is not None and prot_err is not None:
+        prot_err = np.atleast_1d(prot_err)
+        tau_err = np.atleast_1d(tau_err)
+        prot_var = prot_err ** 2
+        tau_var = tau_err ** 2
+        age_var = prot_var * ((tau / k_c) / prot + (k_i / tau) * prot) ** 2 \
+                + tau_var * (np.log(prot / P0) / k_c - (prot**2 - P0**2) * (k_i / 2) / tau ** 2) ** 2
+        if initial_err:
+            age_var += (Gyro_Barnes2010(tau, prot=3.4, P0=0.12) / 2) ** 2
+        age_err = np.sqrt(age_var)
+        return age, age_err
+    return age
