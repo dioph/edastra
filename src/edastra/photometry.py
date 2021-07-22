@@ -1,7 +1,7 @@
 import numpy as np
 
 
-def flux_to_mag(flux, flux0, mag0=0., flux_err=None):
+def flux_to_mag(flux, flux0, mag0=0.0, flux_err=None):
     flux = np.atleast_1d(flux)
     mag = -2.5 * np.log10(flux / flux0) + mag0
     if flux_err is not None:
@@ -27,7 +27,9 @@ def BPRP_to_BV_Evans2018(bprp, bprp_err=None):
         gv_err = np.sqrt(gv_var)
     # sigma = 0.06285
     # TODO
-    bv = np.array([np.roots([-0.001768, -0.2297, -0.02385, -0.02907-x])[2] for x in gv])
+    bv = np.array(
+        [np.roots([-0.001768, -0.2297, -0.02385, -0.02907 - x])[2] for x in gv]
+    )
     return bv
 
 

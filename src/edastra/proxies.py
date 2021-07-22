@@ -1,8 +1,8 @@
-import numpy as np
 from astropy.convolution import Box1DKernel
+import numpy as np
 from scipy import integrate, signal
 
-from .utils import smooth, get_noise, acf
+from .utils import acf, get_noise, smooth
 
 
 def Vrng_Basri2011(y):
@@ -85,7 +85,7 @@ def iAC_He2015(y):
 def SDR_Basri2018(t, y, prot):
     """Basri & Nguyen 2018, ApJ, 863, 190"""
     if prot > 8:
-        yf = smooth(y, Box1DKernel(width=prot/8))
+        yf = smooth(y, Box1DKernel(width=prot / 8))
     else:
         yf = y.copy()
     dips, _ = signal.find_peaks(-yf, width=4)

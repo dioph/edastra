@@ -1,0 +1,19 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[packages]
+astropy = "*"
+matplotlib = "*"
+scipy = "*"
+
+[dev-packages]
+black = "==20.8b1"
+flake8 = "*"
+isort = "*"
+jupyter = "*"
+tox = "*"
+
+[requires]
+python_version = "3"
