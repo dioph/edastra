@@ -11,6 +11,7 @@ with open("README.md", "r") as f:
 
 install_requires = [
     "astropy",
+    "emcee",
     "matplotlib",
     "scipy",
 ]
